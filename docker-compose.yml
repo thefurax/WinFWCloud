@@ -1,0 +1,22 @@
+version: '3.8'
+
+services:
+  database:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: firewall_central
+      POSTGRES_USER: app
+      POSTGRES_PASSWORD: password
+    ports:
+      - "5432:5432"
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    depends_on:
+      - database
+    environment:
+      DATABASE_URL: postgresql://app:password@database:5432/firewall_central
+    ports:
+      - "8080:80"
