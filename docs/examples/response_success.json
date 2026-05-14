@@ -1,0 +1,7 @@
+{
+  "agent_id": "agent-001",
+  "correlation_id": "req-123",
+  "status": "success",
+  "message": "Rule applied correctly on nftables",
+  "timestamp": "2023-10-27T10:05:00Z"
+}

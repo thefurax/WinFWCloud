@@ -1,0 +1,12 @@
+{
+  "agent_id": "agent-001",
+  "msg_id": "req-123",
+  "command": "ADD_RULE",
+  "payload": {
+    "name": "Allow-HTTPS",
+    "direction": "inbound",
+    "action": "allow",
+    "protocol": "tcp",
+    "port": 443
+  }
+}

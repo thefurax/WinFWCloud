@@ -13,10 +13,12 @@ services:
   backend:
     build:
       context: ./backend
-      dockerfile: Dockerfile
     depends_on:
       - database
+    volumes:
+      - ./certs:/var/www/html/certs:ro
     environment:
       DATABASE_URL: postgresql://app:password@database:5432/firewall_central
     ports:
       - "8080:80"
+      - "8081:8081"

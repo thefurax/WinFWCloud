@@ -4,50 +4,39 @@ Ce projet permet de gérer de manière centralisée les règles de pare-feu pour
 
 ## Architecture du MVP
 - **Backend** : API Symfony (PHP 8.2+) gérant l'orchestration.
-- **Agent** : Binaire Go léger installé sur les serveurs cibles.
-- **Communication** : WebSockets (WSS) + mTLS (simulé dans ce squelette).
+- **Agent** : Binaire Go léger (Onboarding automatisé).
+- **Communication** : WebSockets (WSS) + mTLS (Mutual TLS).
 
 ## Pré-requis
 - Docker & Docker Compose
-- PHP 8.2+ & Composer
+- PHP 8.3+ & Composer
 - Go 1.24+
 
-## Installation Rapide
+## Installation Rapide (Développement)
 
-1. **Lancer l'infrastructure (Base de données)** :
+1. **Générer la CA racine** (une seule fois) :
    ```bash
-   docker-compose up -d
+   bash scripts/generate-certs.sh
    ```
 
-2. **Configurer le Backend** :
+2. **Démarrage Serveur** :
    ```bash
+   docker-compose up -d
    cd backend
    composer install
    php bin/console doctrine:migrations:migrate
+   php bin/websocket-server.php
    ```
 
-3. **Lancer l'Agent** :
+3. **Lancement de l'Agent (Onboarding par Token)** :
+   *   Générez un token en base de données (table `registration_token`).
+   *   Lancez l'agent :
    ```bash
    cd agent
-   go run cmd/agent/main.go
+   AGENT_TOKEN=votre-token go run cmd/agent/main.go
    ```
+   L'agent va automatiquement générer sa clé privée, son CSR, et obtenir son certificat signé via l'API Bootstrap.
 
-## API Endpoints (Exemples)
-
-### Enregistrement d'un agent
-`POST /api/v1/agent/register`
-```json
-{
-  "hostname": "srv-web-01",
-  "os": "linux"
-}
-```
-
-### Heartbeat
-`POST /api/v1/agent/heartbeat`
-
-## Structure du Projet
-- `agent/` : Code source de l'agent Go.
-- `backend/` : Code source de l'API Symfony.
-- `scripts/` : Utilitaires de développement et validation.
-- `docs/` : Documentation technique et exemples de messages.
+## Sécurité
+- L'API Bootstrap transmet le token. En production, assurez-vous que le backend Symfony est exposé via **HTTPS** (Reverse Proxy type Nginx/Traefik).
+- Le tunnel WebSocket utilise obligatoirement le **mTLS**.
