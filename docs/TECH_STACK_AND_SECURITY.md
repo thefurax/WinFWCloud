@@ -10,31 +10,41 @@
 | **Agents** | **Go (Golang)** | Compilation statique sans dépendances (idéal pour Windows/Linux), performance système, bibliothèques réseau matures. |
 | **Communication** | **WSS + mTLS** | WebSocket sécurisé pour le temps réel et passage de NAT. Authentification mutuelle par certificats. |
 
-## 2. Modèle de Données Principal
+## 2. Modèle de Données Étendu
 
-### 2.1 Serveurs (`Server`)
-- `uuid`: Identifiant unique.
-- `hostname`: Nom de la machine.
-- `os_family`: Linux ou Windows.
-- `last_heartbeat`: Dernier signe de vie de l'agent.
-- `status`: Online, Offline, Pending, Maintenance.
+### 2.1 Serveurs & Groupes
+- **Server** : `uuid`, `hostname`, `os_family`, `agent_version`, `status`, `last_seen`.
+- **FirewallGroup** : `id`, `name`, `description`. (Relation Many-to-Many avec Server).
+- **Policy** : `id`, `name`, `rules` (JSONB ou relation). Une Policy peut être liée à un FirewallGroup ou un Server unique.
 
-### 2.2 Règles de Pare-feu (`FirewallRule`)
-- `name`, `description`.
-- `direction`: Inbound / Outbound.
-- `action`: Allow / Deny.
-- `protocol`: TCP, UDP, ICMP, Any.
-- `priority`.
-- `status`: Active, Deployment_Pending, Failed.
+### 2.2 Objets Réseau (Bibliothèque)
+- **NetworkObject** :
+    - `id`, `name`, `type` (IP, Range, CIDR, DNS).
+    - `value` (ex: "192.168.1.1").
+    - `version` (incrémenté à chaque modif).
+- **NetworkObjectGroup** : `id`, `name`. (Contient des NetworkObjects ou d'autres groupes).
+
+### 2.3 Services (Bibliothèque)
+- **Service** :
+    - `id`, `name`, `protocol` (TCP, UDP, ICMP, Any).
+    - `port_start`, `port_end`.
+    - `icmp_type`, `icmp_code`.
+- **ServiceGroup** : `id`, `name`. (Contient des Services).
+
+### 2.4 Règles de Pare-feu (FirewallRule)
+- `id`, `name`, `priority`, `action` (Allow/Deny), `direction` (In/Out).
+- **Source** : Relation vers `NetworkObject` ou `NetworkObjectGroup`.
+- **Destination** : Relation vers `NetworkObject` ou `NetworkObjectGroup`.
+- **Service** : Relation vers `Service` ou `ServiceGroup`.
+- `status` (Synced, Pending, Drift, Error).
 
 ## 3. Stratégie de Sécurité
 
 ### 3.1 Authentification Forte (mTLS)
 - Chaque agent possède un certificat signé par une **CA interne** gérée par Symfony.
-- Le serveur rejette toute connexion dont le certificat est invalide ou révoqué.
 
 ### 3.2 Signature des Commandes
-- Chaque message envoyé est **signé** (Ed25519). L'agent vérifie la signature avant exécution.
+- Chaque message envoyé est **signé** (Ed25519).
 
 ### 3.3 Mécanisme Anti-Lockout & Rollback Automatique
 - **Application Conditionnelle** : L'agent applique la règle temporairement.
@@ -42,14 +52,8 @@
 
 ## 4. Gestion des Conflits et Dérive (Drift)
 
-### 4.1 Détection de Dérive Manuelle
-- L'agent calcule régulièrement un **checksum (hash)** de la configuration native du pare-feu.
-- Ce hash est envoyé au serveur central lors des Heartbeats.
-- Si le hash diffère de celui attendu (basé sur la base de données), le serveur marque le serveur comme "Out-of-sync" et alerte l'administrateur.
+### 4.1 Détection de Dérive
+- L'agent envoie un hash du ruleset réel. S'il diffère de la DB, état = `Drift`.
 
-### 4.2 Résolution des Conflits
-- **Priorité à la Plateforme** : Par défaut, la plateforme est la source unique de vérité. Une synchronisation forcée écrase les règles locales non répertoriées.
-- **Règles Protégées** : Possibilité de définir des tags pour ignorer certaines règles locales pré-existantes (ex: règles Docker, Cloud provider).
-
-## 5. Journalisation et Audit
-- Table d'audit immuable : `Qui`, `Quoi`, `Quand`, `Résultat`.
+### 4.2 Dépendances (Graph de relations)
+- Une table de jointure ou un index permet de trouver instantanément toutes les `FirewallRule` utilisant un `NetworkObject` spécifique pour propager les mises à jour.

@@ -10,6 +10,17 @@ def check_file_exists(filepath):
         print(f"[ERREUR] Fichier manquant : {filepath}")
         return False
 
+def check_no_placeholders(filepath):
+    if not os.path.exists(filepath):
+        return False
+    with open(filepath, 'r') as f:
+        content = f.read()
+    if "[..." in content or "voir version précédente" in content.lower():
+        print(f"[ERREUR] Placeholder trouvé dans {filepath}")
+        return False
+    print(f"[OK] Aucun placeholder dans {filepath}")
+    return True
+
 def check_content(filepath, patterns):
     if not os.path.exists(filepath):
         return False
@@ -52,7 +63,8 @@ def main():
         "docs/TECH_STACK_AND_SECURITY.md",
         "docs/API_SPEC.md",
         "docs/AGENT_SPEC.md",
-        "docs/TEST_CHECKLIST.md"
+        "docs/TEST_CHECKLIST.md",
+        "docs/FRONTEND_AND_UX.md"
     ]
 
     sections = {
@@ -69,16 +81,16 @@ def main():
             "Stratégie de Sécurité",
             "Anti-Lockout",
             "Rollback Automatique",
-            "Gestion des Conflits",
-            "Dérive"
+            "NetworkObject",
+            "FirewallGroup"
         ],
         "docs/API_SPEC.md": [
             "Étude Comparative",
             "Protocole de Communication",
             "Formats JSON",
             "Endpoints API REST",
-            "mTLS",
-            "WebSocket"
+            "Network-objects",
+            "Firewall-groups"
         ],
         "docs/AGENT_SPEC.md": [
             "Cycle de Vie",
@@ -92,6 +104,13 @@ def main():
             "Tests de Sécurité",
             "Anti-Lockout",
             "Intégrité"
+        ],
+        "docs/FRONTEND_AND_UX.md": [
+            "Maquette Logique",
+            "Éditeur de Règles",
+            "Flux Utilisateur",
+            "Gestion des Dépendances",
+            "Validation UX"
         ]
     }
 
@@ -102,6 +121,9 @@ def main():
         if not check_file_exists(d):
             success = False
             continue
+
+        if not check_no_placeholders(d):
+            success = False
 
         if not check_content(d, sections[d]):
             success = False

@@ -4,16 +4,16 @@
 
 | Option | Avantages | Inconvénients | Recommandation |
 | :--- | :--- | :--- | :--- |
-| **HTTP Polling** (L'agent interroge l'API) | Simple à implémenter, traverse facilement les pare-feu. | Latence élevée, charge inutile sur le serveur, pas de temps réel. | **Non retenu** pour l'application des règles critiques. |
-| **Server Push** (SSE) | Unidirectionnel efficace, standard HTTP. | Difficile pour les agents derrière un NAT agressif, pas de retour d'état natif. | **Non retenu**. |
-| **Message Broker** (MQTT/RabbitMQ) | Scalabilité massive, persistance des messages. | Ajoute une dépendance lourde, gestion complexe du mTLS sur le broker. | Option secondaire pour très gros parcs. |
-| **WebSockets (WSS)** | Bi-directionnel, temps réel, passage de NAT (agent vers serveur). | Nécessite une gestion des reconnexions et du stateful côté serveur. | **Recommandé** pour sa réactivité et sa simplicité d'intégration mTLS. |
+| **HTTP Polling** | Simple, traverse les pare-feu. | Latence élevée, charge serveur. | Non retenu. |
+| **Server Push (SSE)** | Unidirectionnel efficace. | Difficile derrière NAT. | Non retenu. |
+| **Message Broker** | Scalabilité. | Dépendance lourde. | Option secondaire. |
+| **WebSockets (WSS)** | Bi-directionnel, temps réel, traverse les NAT (sortant). | Stateful côté serveur. | **Recommandé** (mTLS natif). |
 
 ## 2. Protocole de Communication (WebSocket + mTLS)
 
-La communication entre le serveur central (Symfony) et les agents (Go) s'effectue via un tunnel **WebSocket sécurisé**.
-- **Canal Sortant** : L'agent initie la connexion (évite d'ouvrir des ports entrants sur les serveurs cibles).
-- **Authentification** : Mutuelle via certificats X.509 (mTLS).
+- **Authentification** : Mutuelle via certificats X.509 signés par la CA interne du serveur Symfony.
+- **Canal** : WSS (WebSocket over TLS 1.3). L'agent initie la connexion.
+- **Payload** : JSON structuré et signé avec Ed25519 côté serveur.
 
 ## 3. Formats JSON des Messages
 
@@ -36,7 +36,7 @@ La communication entre le serveur central (Symfony) et les agents (Go) s'effectu
         "direction": "inbound",
         "protocol": "tcp",
         "dst_port": 443,
-        "src_ip": "0.0.0.0/0"
+        "src_ip": "10.0.0.0/8"
       }
     ]
   }
@@ -63,16 +63,22 @@ La communication entre le serveur central (Symfony) et les agents (Go) s'effectu
 }
 ```
 
-## 4. Endpoints API REST (Symfony)
+## 4. Endpoints API REST (Bibliothèques et Gestion)
 
-### 4.1 Gestion des Serveurs
-- `GET /api/v1/servers` : Liste des serveurs et état.
-- `POST /api/v1/servers/{uuid}/sync` : Force une synchronisation.
+### 4.1 Objets Réseau (`/api/v1/network-objects`)
+- `GET /` : Liste les objets avec filtres.
+- `POST /` : Créer un objet (IP, CIDR, Range, DNS).
+- `GET /{id}/usages` : Liste les règles/politiques impactées.
+- `DELETE /{id}` : Supprime (si non utilisé).
 
-### 4.2 Gestion des Règles
-- `POST /api/v1/firewall-rules` : Créer une règle.
-- `POST /api/v1/firewall-rules/{id}/deploy` : Déployer.
+### 4.2 Services (`/api/v1/services`)
+- `GET /` : Liste les services.
+- `POST /` : Créer un service (Protocol, Port/Range).
+
+### 4.3 Groupes et Politiques
+- `GET /api/v1/firewall-groups` : Liste les groupes de serveurs.
+- `PATCH /api/v1/firewall-groups/{id}/policy` : Assigner une politique.
 
 ## 5. Sécurité
-- **Authentification** : JWT pour les admins, mTLS pour les agents.
-- **Autorisation** : RBAC (Admin, Operateur, Lecture seule).
+- **RBAC** : `ROLE_ADMIN`, `ROLE_OPERATOR`, `ROLE_VIEWER`.
+- **Validation** : Validation stricte via Symfony Validator.
