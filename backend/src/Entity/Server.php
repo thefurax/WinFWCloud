@@ -21,13 +21,17 @@ class Server
     #[ORM\Column(length: 20)]
     private ?string $status = 'offline';
 
-    #[ORM\Column(type: 'datetime_immutable')]
+    #[ORM\Column(type: 'datetime_immutable', options: ['default' => 'CURRENT_TIMESTAMP'])]
     private ?\DateTimeImmutable $lastSeen = null;
 
-    // Getters and setters...
+    #[ORM\ManyToOne(targetEntity: Policy::class)]
+    private ?Policy $policy = null;
+
     public function getId(): ?string { return $this->id; }
     public function getHostname(): ?string { return $this->hostname; }
     public function setHostname(string $hostname): self { $this->hostname = $hostname; return $this; }
     public function getOsFamily(): ?string { return $this->osFamily; }
     public function setOsFamily(string $osFamily): self { $this->osFamily = $osFamily; return $this; }
+    public function getPolicy(): ?Policy { return $this->policy; }
+    public function setPolicy(?Policy $policy): self { $this->policy = $policy; return $this; }
 }

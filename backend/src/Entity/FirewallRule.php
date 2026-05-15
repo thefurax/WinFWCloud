@@ -12,6 +12,9 @@ class FirewallRule
     #[ORM\Column]
     private ?int $id = null;
 
+    #[ORM\ManyToOne(targetEntity: Policy::class, inversedBy: 'rules')]
+    private ?Policy $policy = null;
+
     #[ORM\Column(length: 255)]
     private ?string $name = null;
 
@@ -34,6 +37,8 @@ class FirewallRule
     private ?string $status = 'pending';
 
     public function getId(): ?int { return $this->id; }
+    public function getPolicy(): ?Policy { return $this->policy; }
+    public function setPolicy(?Policy $policy): self { $this->policy = $policy; return $this; }
     public function getName(): ?string { return $this->name; }
     public function setName(string $name): self { $this->name = $name; return $this; }
     public function getAction(): ?string { return $this->action; }
@@ -46,6 +51,4 @@ class FirewallRule
     public function setDstPort(?int $dstPort): self { $this->dstPort = $dstPort; return $this; }
     public function getSrcIp(): ?string { return $this->srcIp; }
     public function setSrcIp(?string $srcIp): self { $this->srcIp = $srcIp; return $this; }
-    public function getStatus(): ?string { return $this->status; }
-    public function setStatus(string $status): self { $this->status = $status; return $this; }
 }

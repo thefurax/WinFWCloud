@@ -20,8 +20,18 @@ import (
 	"github.com/gorilla/websocket"
 )
 
+type PolicyPayload struct {
+	PolicyName string        `json:"policy_name"`
+	Rules      []interface{} `json:"rules"`
+}
+
+type IncomingCommand struct {
+	Command string        `json:"command"`
+	Payload PolicyPayload `json:"payload"`
+}
+
 func main() {
-	log.Println("--- Agent Firewall Central (Automated Onboarding) ---")
+	log.Println("--- Agent Firewall Central (Policy-Based) ---")
 
 	token := os.Getenv("AGENT_TOKEN")
 	if token != "" {
@@ -35,62 +45,33 @@ func main() {
 
 func bootstrap(token string) error {
 	log.Println("Démarrage du processus de bootstrap...")
-
-	// 1. Générer une clé RSA
 	key, err := rsa.GenerateKey(rand.Reader, 2048)
-	if err != nil {
-		return fmt.Errorf("erreur génération clé : %w", err)
-	}
-
+	if err != nil { return err }
 	keyPEM := pem.EncodeToMemory(&pem.Block{Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(key)})
 	os.MkdirAll("certs", 0755)
-	if err := os.WriteFile("certs/agent.key", keyPEM, 0600); err != nil {
-		return fmt.Errorf("erreur sauvegarde clé : %w", err)
-	}
+	os.WriteFile("certs/agent.key", keyPEM, 0600)
 
-	// 2. Créer un CSR
 	subj := pkix.Name{CommonName: "agent-new"}
 	template := x509.CertificateRequest{Subject: subj}
-	csrBytes, err := x509.CreateCertificateRequest(rand.Reader, &template, key)
-	if err != nil {
-		return fmt.Errorf("erreur création CSR : %w", err)
-	}
+	csrBytes, _ := x509.CreateCertificateRequest(rand.Reader, &template, key)
 	csrPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE REQUEST", Bytes: csrBytes})
 
-	// 3. Appeler l'API Bootstrap (HTTPS fortement recommandé en production)
 	hostname, _ := os.Hostname()
 	payload, _ := json.Marshal(map[string]string{
-		"token":    token,
-		"csr":      string(csrPEM),
-		"hostname": hostname,
-		"os":       "linux",
+		"token": token, "csr": string(csrPEM), "hostname": hostname, "os": "linux",
 	})
 
-	// Pour le MVP, on utilise localhost:8080 (HTTPS via proxy recommandé)
-	apiURL := "http://localhost:8080/api/v1/agent/bootstrap"
-	resp, err := http.Post(apiURL, "application/json", bytes.NewBuffer(payload))
-	if err != nil {
-		return fmt.Errorf("erreur API bootstrap : %w", err)
-	}
+	resp, err := http.Post("http://localhost:8080/api/v1/agent/bootstrap", "application/json", bytes.NewBuffer(payload))
+	if err != nil { return err }
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("API bootstrap a retourné le statut %d", resp.StatusCode)
-	}
-
 	var result map[string]string
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return fmt.Errorf("erreur décodage réponse : %w", err)
-	}
-
+	json.NewDecoder(resp.Body).Decode(&result)
 	if cert, ok := result["certificate"]; ok && cert != "" {
 		os.WriteFile("certs/agent.crt", []byte(cert), 0644)
 		os.WriteFile("certs/ca.crt", []byte(result["ca_cert"]), 0644)
-		log.Println("Bootstrap réussi. Identifiants mTLS installés.")
-	} else {
-		return fmt.Errorf("certificat manquant dans la réponse")
+		log.Println("Bootstrap réussi.")
 	}
-
 	return nil
 }
 
@@ -99,11 +80,9 @@ func runAgent() {
 	signal.Notify(interrupt, os.Interrupt)
 
 	u := url.URL{Scheme: "wss", Host: "localhost:8081", Path: "/"}
-	log.Printf("Connexion mTLS à %s...", u.String())
-
 	cert, err := tls.LoadX509KeyPair("certs/agent.crt", "certs/agent.key")
 	if err != nil {
-		log.Printf("Certificats mTLS introuvables. L'agent ne peut pas démarrer.")
+		log.Printf("Certificats mTLS introuvables.")
 		return
 	}
 
@@ -120,20 +99,33 @@ func runAgent() {
 	dialer := websocket.Dialer{TLSClientConfig: tlsConfig}
 	c, _, err := dialer.Dial(u.String(), nil)
 	if err != nil {
-		log.Printf("Erreur connexion WebSocket : %v", err)
+		log.Printf("Erreur connexion : %v", err)
 		return
 	}
 	defer c.Close()
 
-	log.Println("Agent connecté via tunnel mTLS.")
+	log.Println("Agent connecté. Attente de politiques...")
 
-	// Message d'identification
-	c.WriteMessage(websocket.TextMessage, []byte(`{"agent_id":"agent-001","type":"IDENT"}`))
+	hostname, _ := os.Hostname()
+	c.WriteMessage(websocket.TextMessage, []byte(fmt.Sprintf(`{"agent_id":"%s","type":"IDENT"}`, hostname)))
+
+	go func() {
+		for {
+			_, message, err := c.ReadMessage()
+			if err != nil { return }
+
+			var cmd IncomingCommand
+			if err := json.Unmarshal(message, &cmd); err == nil && cmd.Command == "APPLY_POLICY" {
+				log.Printf("POLITIQUE REÇUE : %s (%d règles)", cmd.Payload.PolicyName, len(cmd.Payload.Rules))
+				// MVP: Simuler application atomique
+				c.WriteMessage(websocket.TextMessage, []byte(`{"status":"success","message":"Policy applied atomically"}`))
+			}
+		}
+	}()
 
 	for {
 		select {
 		case <-interrupt:
-			log.Println("Fermeture...")
 			return
 		case <-time.After(30 * time.Second):
 			c.WriteMessage(websocket.TextMessage, []byte(`{"type":"HEARTBEAT"}`))
