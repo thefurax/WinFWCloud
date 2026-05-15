@@ -43,6 +43,7 @@ class DeployPolicyCommand extends Command
         foreach ($policy->getRules() as $rule) {
             $rules[] = [
                 'name' => $rule->getName(),
+                'ip_version' => $rule->getIpVersion(),
                 'action' => $rule->getAction(),
                 'direction' => $rule->getDirection(),
                 'protocol' => $rule->getProtocol(),
@@ -53,7 +54,7 @@ class DeployPolicyCommand extends Command
 
         $command = [
             'msg_id' => uniqid(),
-            'agent_id' => $server->getHostname(), // MVP simplification
+            'agent_id' => $server->getHostname(),
             'command' => 'APPLY_POLICY',
             'payload' => [
                 'policy_name' => $policy->getName(),
@@ -66,7 +67,7 @@ class DeployPolicyCommand extends Command
 
         file_put_contents($cmdDir . '/' . $server->getHostname() . '.json', json_encode($command));
 
-        $output->writeln("<info>Policy '{$policy->getName()}' queued for {$server->getHostname()}</info>");
+        $output->writeln("<info>Policy '{$policy->getName()}' (including IPv4/IPv6 sections) queued for {$server->getHostname()}</info>");
 
         return Command::SUCCESS;
     }

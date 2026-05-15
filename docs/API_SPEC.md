@@ -1,27 +1,22 @@
 # Spécifications API et Protocoles de Communication
 
 ## 1. Étude Comparative des Options de Communication
-
-| Option | Recommendation |
-| :--- | :--- |
-| **WebSockets (WSS)** | **Recommandé** (mTLS natif). |
+- **WebSockets (WSS)** : Recommandé.
 
 ## 2. Protocole de Communication (WebSocket + mTLS)
-- **Authentification** : Mutuelle (mTLS).
-- **Canal** : WSS (TLS 1.3).
+- Authentification : mTLS.
 
-## 3. Protocole de Politique (APPLY_POLICY)
+## 3. Formats JSON des Messages
 
-### 3.1 Formats JSON des Messages (Commande)
+### 3.1 Commande APPLY_POLICY
 ```json
 {
   "agent_id": "hostname-01",
   "command": "APPLY_POLICY",
   "payload": {
-    "policy_name": "Web-Servers-Policy",
+    "policy_name": "Standard-Policy",
     "rules": [
-      { "name": "HTTP", "action": "allow", "port": 80 },
-      { "name": "HTTPS", "action": "allow", "port": 443 }
+      { "name": "HTTP", "ip_version": "ipv4", "direction": "inbound", "action": "allow", "port": 80 }
     ]
   }
 }
@@ -29,9 +24,6 @@
 
 ## 4. Endpoints API REST (Symfony)
 
-### 4.1 Gestion des Politiques (`/api/v1/policies`)
-- `GET /` : Liste les politiques.
-
-### 4.2 Bibliothèques
-- **Network-objects** : Gestion des IPs.
-- **Firewall-groups** : Groupement de serveurs.
+### 4.1 Bibliothèques
+- **Network-objects** : IPs/CIDRs.
+- **Firewall-groups** : Groupes de serveurs.
